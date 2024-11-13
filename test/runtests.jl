@@ -28,6 +28,6 @@ FUNCS_AND_INPUTS = [
 
     @testset "performance $grad_function" for grad_function in GRAD_FUNCTIONS
         res = @b $grad_function(f, inputs...)
-        @info "$(Symbol(f)) @ $(inputs) : $(Symbol(grad_function)) - $(res.time)"
+        @info "$(Symbol(f)) @ $(inputs) : $(Symbol(grad_function)) $(round(res.time; sigdigits=5))"
     end
 end
