@@ -1,7 +1,9 @@
+using Chairmarks
+using Logging
 using Test
 using Marketing
 
-TEST_FUNCTIONS = [grad_forward, grad_reverse, grad_reverse_tape]
+GRAD_FUNCTIONS = [grad_forward, grad_reverse, grad_reverse_tape]
 
 function test_accuracy(grad_function, f, inputs; atol=1e-6)
     value_true = f(inputs...)
@@ -12,10 +14,20 @@ function test_accuracy(grad_function, f, inputs; atol=1e-6)
     @test grads ≈ grads_fd atol=atol
 end
 
-@testset "f(x,y)=x*y+sin(x)" begin
-    for grad_function in TEST_FUNCTIONS
-        f(x, y) = x*y + sin(x)
-        inputs = [1.0, 2.0]
+f(x, y) = x * y + sin(x)
+
+FUNCS_AND_INPUTS = [
+    (f, [1.0, 2.0])
+    (f, [3.0, 5.0])
+]
+
+@testset "$(Symbol(f)) @ $(inputs)" for (f, inputs) in FUNCS_AND_INPUTS
+    @testset "accuracy $grad_function" for grad_function in GRAD_FUNCTIONS
         test_accuracy(grad_function, f, inputs)
+    end
+
+    @testset "performance $grad_function" for grad_function in GRAD_FUNCTIONS
+        res = @b $grad_function(f, inputs...)
+        @info "$(Symbol(f)) @ $(inputs) : $(Symbol(grad_function)) - $(res.time)"
     end
 end
