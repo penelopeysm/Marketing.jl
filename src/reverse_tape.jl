@@ -1,73 +1,74 @@
-mutable struct TapeNode<:Real
-    tape::Base.RefValue{Vector{TapeNode}}
-    value::Float64
-    deriv::Union{Float64,Nothing}
+struct TapeNode
     children::Array{Tuple{Int64, Float64}}  # Child nodes plus the weight that this node contributes
 end
 
-function Base.:+(x::TapeNode, y::TapeNode)
-    tape = x.tape
-    new_node = TapeNode(tape, x.value + y.value, nothing, [])
-    new_index = length(tape[]) + 1
-    push!(tape[], new_node)
-    push!(x.children, (new_index, 1.0))  # 1.0 = d(x + y)/dx
-    push!(y.children, (new_index, 1.0))  # 1.0 = d(x + y)/dy
-    return new_node
-end
-function Base.:-(x::TapeNode, y::TapeNode)
-    tape = x.tape
-    new_node = TapeNode(tape, x.value - y.value, nothing, [])
-    new_index = length(tape[]) + 1
-    push!(tape[], new_node)
-    push!(x.children, (new_index, 1.0))   # 1.0 = d(x - y)/dx
-    push!(y.children, (new_index, -1.0))  # -1.0 = d(x - y)/dy
-    return new_node
-end
-function Base.:*(x::TapeNode, y::TapeNode)
-    tape = x.tape
-    new_node = TapeNode(tape, x.value * y.value, nothing, [])
-    new_index = length(tape[]) + 1
-    push!(tape[], new_node)
-    push!(x.children, (new_index, y.value))  # y.value = d(x * y)/dx
-    push!(y.children, (new_index, x.value))  # x.value = d(x * y)/dy
-    return new_node
-end
-function Base.sin(x::TapeNode)
-    tape = x.tape
-    new_node = TapeNode(tape, sin(x.value), nothing, [])
-    new_index = length(tape[]) + 1
-    push!(tape[], new_node)
-    push!(x.children, (new_index, cos(x.value)))  # cos(x.value) = d(sin(x))/dx
-    return new_node
-end
-function Base.cos(x::TapeNode)
-    tape = x.tape
-    new_node = TapeNode(tape, cos(x.value), nothing, [])
-    new_index = length(tape[]) + 1
-    push!(tape[], new_node)
-    push!(x.children, (new_index, -sin(x.value)))  # -sin(x.value) = d(cos(x))/dx
-    return new_node
+mutable struct Expr<:Real
+    tape::Base.RefValue{Vector{TapeNode}}
+    index::Int64
+    value::Float64
 end
 
-function calc_derivative!(node::TapeNode)
-    if isnothing(node.deriv)
-        node.deriv = sum([
-            weight * calc_derivative!(node.tape[][child_index])
-            for (child_index, weight) in node.children
-        ])
+function add_to_tape_and_return_index(tape_ref::Base.RefValue{Vector{TapeNode}},
+                                      children::Array{Tuple{Int64, Float64}})
+    new_index = length(tape_ref[]) + 1
+    new_node = TapeNode(children)
+    push!(tape_ref[], new_node)
+    return new_index
+end
+
+function Base.:+(x::Expr, y::Expr)
+    # Create a new node and add it to the tape
+    new_index = add_to_tape_and_return_index(x.tape, [(x.index, 1.0), (y.index, 1.0)])
+    # Construct and return a new expression that points to this node
+    return Expr(x.tape, new_index, x.value + y.value)
+end
+function Base.:-(x::Expr, y::Expr)
+    new_index = add_to_tape_and_return_index(x.tape, [(x.index, 1.0), (y.index, -1.0)])
+    return Expr(x.tape, new_index, x.value - y.value)
+end
+function Base.:*(x::Expr, y::Expr)
+    new_index = add_to_tape_and_return_index(x.tape, [(x.index, y.value), (y.index, x.value)])
+    return Expr(x.tape, new_index, x.value * y.value)
+end
+function Base.sin(x::Expr)
+    new_index = add_to_tape_and_return_index(x.tape, [(x.index, cos(x.value))])
+    return Expr(x.tape, new_index, sin(x.value))
+end
+function Base.cos(x::Expr)
+    new_index = add_to_tape_and_return_index(x.tape, [(x.index, -sin(x.value))])
+    return Expr(x.tape, new_index, cos(x.value))
+end
+
+function calculate_derivatives(tape_ref::Base.RefValue{Vector{TapeNode}}, output_index::Int64)
+    n_nodes = length(tape_ref[])
+    derivs = zeros(n_nodes)
+    derivs[output_index] = 1.0
+    for i in n_nodes:-1:1
+        node = tape_ref[][i]
+        for (child_index, weight) in node.children
+            derivs[child_index] += weight * derivs[i]
+        end
     end
-    return node.deriv
+    return derivs
 end
 
 function grad_reverse_tape(g, inputs...)
-    # Empty tape
-    tape = TapeNode[]
+    # Reference to new mpty tape
+    tape_ref = Ref(TapeNode[])
     # Forward pass
-    node_inputs = [TapeNode(Ref(tape), input, nothing, []) for input in inputs]
-    output_node = g(node_inputs...)
+    exprs = Expr[]
+    input_indices = Int64[]
+    for i in eachindex(inputs)
+        new_index = add_to_tape_and_return_index(tape_ref, Tuple{Int64, Float64}[])
+        push!(exprs, Expr(tape_ref, new_index, inputs[i]))
+        push!(input_indices, new_index)
+    end
+    output_expr = g(exprs...)
     # Calculate the derivatives
-    output_node.deriv = 1.0
-    derivs = [calc_derivative!(node) for node in node_inputs]
-    # Return the output and the derivatives
-    return output_node.value, derivs
+    derivs = calculate_derivatives(tape_ref, output_expr.index)
+    # Get the derivatives we care about
+    return output_expr.value, collect(derivs[i] for i in input_indices)
 end
+
+f(x, y) = x * y + sin(x)
+grad_reverse_tape(f, 1.0, 2.0)
