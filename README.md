@@ -20,6 +20,6 @@ julia> grad_reverse(f, 1.0, 2.0)   # Reverse-mode
 julia> grad_reverse_tape(f, 1.0, 2.0)   # Reverse-mode using a tape
 (2.8414709848078967, [2.5403023058681398, 1.0])
 
-julia> grad_fd(f, 1.0, 2.0)   # Finite differences (forward)
-(2.8414709848078967, [2.5403013026448207, 1.000000082740371])
+julia> grad_fd(f, 1.0, 2.0)   # Finite differences (central)
+(2.8414709848078967, [2.5403023240500033, 0.999999993922529])
 ```
