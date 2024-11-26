@@ -22,11 +22,11 @@ FUNCS_AND_INPUTS = [
 ]
 
 @testset "$(Symbol(f)) @ $(inputs)" for (f, inputs) in FUNCS_AND_INPUTS
-    @testset "accuracy $grad_function" for grad_function in GRAD_FUNCTIONS
+    @testset "$grad_function" for grad_function in GRAD_FUNCTIONS
         test_accuracy(grad_function, f, inputs)
     end
-
-    @testset "performance $grad_function" for grad_function in GRAD_FUNCTIONS
+    
+    @testset "performance $grad_function" for grad_function in [GRAD_FUNCTIONS..., grad_fd]
         res = @b $grad_function(f, inputs...)
         @info "$(Symbol(f)) @ $(inputs) : $(Symbol(grad_function)) $(round(res.time; sigdigits=5))"
     end
