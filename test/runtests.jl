@@ -31,3 +31,31 @@ FUNCS_AND_INPUTS = [
         @info "$(Symbol(f)) @ $(inputs) : $(Symbol(grad_function)) $(round(res.time; sigdigits=5))"
     end
 end
+
+@testset "Additional finite differences" begin
+    # R^m -> R^n: Jacobian, single argument
+    # -------------------------------------
+    g(x) = x .* x
+    in = [1.0, 2.0]
+    # Test both the dispatch function and the true function
+    val, jac = grad_fd(g, in)
+    @test val ≈ g(in) atol=1e-6
+    @test jac ≈ [(2*in[1]) 0.0; 0.0 (2*in[2])] atol=1e-6
+    val, jac = Marketing.grad_fd_vector(g, in)
+    @test val ≈ g(in) atol=1e-6
+    @test jac ≈ [(2*in[1]) 0.0; 0.0 (2*in[2])] atol=1e-6
+
+    # (R^a, R^b) -> R^n: Jacobian, multiple arguments
+    # -----------------------------------------------
+    h(x, y) = x .* y
+    ins = ([1.0, 2.0], [3.0, 4.0])
+    # Test both the dispatch function and the true function
+    val, jac = grad_fd(h, ins...)
+    @test val ≈ h(ins...) atol=1e-6
+    @test jac[1] ≈ [ins[2][1] 0.0; 0.0 ins[2][2]] atol=1e-6
+    @test jac[2] ≈ [ins[1][1] 0.0; 0.0 ins[1][2]] atol=1e-6
+    val, jac = Marketing.grad_fd_vector_multiple(h, ins...)
+    @test val ≈ h(ins...) atol=1e-6
+    @test jac[1] ≈ [ins[2][1] 0.0; 0.0 ins[2][2]] atol=1e-6
+    @test jac[2] ≈ [ins[1][1] 0.0; 0.0 ins[1][2]] atol=1e-6
+end
